@@ -1,4 +1,4 @@
-import { roster, prettyDate, shortDate, PERIODS } from './roster'
+import { roster, prettyDate, shortDate, periodOf, PERIODS } from './roster'
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -31,6 +31,10 @@ function divisionSheet(XLSX, division, sessions) {
   rows.push([])
 
   rows.push(['Roll', 'PRN', 'Name', ...list.map((s) => shortDate(s.date)), 'Periods attended', 'Periods held', 'Attendance %'])
+  rows.push(['', '', '', ...list.map((s) => {
+    const p = periodOf(s.start, s.type)
+    return p ? `P${p}` : '—'
+  })])
   rows.push(['', '', '', ...list.map((s) => `${s.start} ${s.type === 'lab' ? 'LAB' : 'TH'}`)])
   rows.push(['', '', '', ...list.map((s) => s.subject || '—')])
 
@@ -49,31 +53,35 @@ function divisionSheet(XLSX, division, sessions) {
     { wch: 5 },
     { wch: 15 },
     { wch: 30 },
-    ...list.map(() => ({ wch: 9 })),
+    ...list.map(() => ({ wch: 10 })),
     { wch: 16 },
     { wch: 12 },
     { wch: 13 }
   ]
 
   const last = nCols - 1
+  const H0 = 3 // first header row (0-based)
+  const H1 = 6 // last header row — date / period / time+kind / subject
   ws['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: Math.max(2, last) } },
     { s: { r: 1, c: 0 }, e: { r: 1, c: Math.max(2, last) } },
-    { s: { r: 3, c: 0 }, e: { r: 5, c: 0 } },
-    { s: { r: 3, c: 1 }, e: { r: 5, c: 1 } },
-    { s: { r: 3, c: 2 }, e: { r: 5, c: 2 } },
-    { s: { r: 3, c: last - 2 }, e: { r: 5, c: last - 2 } },
-    { s: { r: 3, c: last - 1 }, e: { r: 5, c: last - 1 } },
-    { s: { r: 3, c: last }, e: { r: 5, c: last } }
+    { s: { r: H0, c: 0 }, e: { r: H1, c: 0 } },
+    { s: { r: H0, c: 1 }, e: { r: H1, c: 1 } },
+    { s: { r: H0, c: 2 }, e: { r: H1, c: 2 } },
+    { s: { r: H0, c: last - 2 }, e: { r: H1, c: last - 2 } },
+    { s: { r: H0, c: last - 1 }, e: { r: H1, c: last - 1 } },
+    { s: { r: H0, c: last }, e: { r: H1, c: last } }
   ]
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 5, c: 0 }, e: { r: 5 + students.length, c: last } }) }
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({ s: { r: H1, c: 0 }, e: { r: H1 + students.length, c: last } })
+  }
 
   return ws
 }
 
 function sessionsSheet(XLSX, sessions) {
   const rows = [
-    ['Division', 'Date', 'Day', 'Start', 'End', 'Type', 'Periods', 'Subject', 'Present', 'Absent', 'Strength', '%']
+    ['Division', 'Date', 'Day', 'Period', 'Start', 'End', 'Type', 'Periods', 'Subject', 'Present', 'Absent', 'Strength', '%']
   ]
   for (const s of sortSessions(sessions)) {
     const strength = roster[s.division].length
@@ -82,6 +90,7 @@ function sessionsSheet(XLSX, sessions) {
       s.division,
       s.date,
       dayOf(s.date),
+      periodOf(s.start, s.type) || '—',
       s.start,
       s.end,
       s.type === 'lab' ? 'Lab' : 'Theory',
@@ -95,19 +104,19 @@ function sessionsSheet(XLSX, sessions) {
   }
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [
-    { wch: 8 }, { wch: 11 }, { wch: 5 }, { wch: 7 }, { wch: 7 }, { wch: 8 },
-    { wch: 8 }, { wch: 24 }, { wch: 9 }, { wch: 8 }, { wch: 9 }, { wch: 7 }
+    { wch: 8 }, { wch: 11 }, { wch: 5 }, { wch: 8 }, { wch: 7 }, { wch: 7 },
+    { wch: 8 }, { wch: 8 }, { wch: 24 }, { wch: 9 }, { wch: 8 }, { wch: 9 }, { wch: 7 }
   ]
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 11 } }) }
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 12 } }) }
   return ws
 }
 
 function logSheet(XLSX, sessions) {
-  const rows = [['Division', 'Date', 'Start', 'Type', 'Periods', 'Subject', 'Roll', 'PRN', 'Name', 'Status']]
+  const rows = [['Division', 'Date', 'Period', 'Start', 'Type', 'Periods', 'Subject', 'Roll', 'PRN', 'Name', 'Status']]
   for (const s of sortSessions(sessions)) {
     for (const st of roster[s.division]) {
       rows.push([
-        s.division, s.date, s.start,
+        s.division, s.date, periodOf(s.start, s.type) || '—', s.start,
         s.type === 'lab' ? 'Lab' : 'Theory',
         s.periods, s.subject || '—',
         st.roll, st.prn, st.name,
@@ -117,10 +126,10 @@ function logSheet(XLSX, sessions) {
   }
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [
-    { wch: 8 }, { wch: 11 }, { wch: 7 }, { wch: 8 }, { wch: 8 },
+    { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 },
     { wch: 24 }, { wch: 6 }, { wch: 15 }, { wch: 30 }, { wch: 9 }
   ]
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 9 } }) }
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 10 } }) }
   return ws
 }
 

@@ -16,9 +16,12 @@ deployed to GitHub Pages, installed as a PWA.
 - **Names view** when the grid isn't enough — full name and PRN per row, same tap target.
 - Every tap echoes the student's name under the tally, so a mis-tap on a 65-tile
   grid is visible immediately.
-- **Theory or lab.** Theory is 1 hour and counts 1 period; a lab is 2 hours and counts
-  2. End time is computed from the start — never typed.
-- Date, start time, subject per session. Recent subjects are remembered.
+- **Pick the slot off the timetable, not the clock.** The day is ten one-hour periods —
+  8:00–10:00, break, then 10:15–18:15 — and the picker shows them by period number and
+  time range. A theory lecture fills one period; a lab fills two and is only offered
+  where it fits inside a block, so no lab ever straddles the 10:00 break or runs past
+  18:15. Switching kind re-snaps the start to a legal slot.
+- Date and subject per session. Recent subjects are remembered.
 - Saving the same division + date + start + subject twice offers to overwrite rather
   than silently duplicating.
 - **Export to Excel** — all divisions or one.
@@ -27,8 +30,8 @@ deployed to GitHub Pages, installed as a PWA.
 
 | Sheet | Contents |
 | --- | --- |
-| `SY-A`, `SY-B`, `TY-B` | Students down the side, sessions across the top. Three header rows per column: date, time + kind, subject. Cells are `P` / `A`. Last three columns: periods attended, periods held, attendance %. |
-| `Sessions` | One row per session — division, date, day, start, end, kind, periods, subject, present, absent, strength, %. |
+| `SY-A`, `SY-B`, `TY-B` | Students down the side, sessions across the top. Four header rows per column: date, period, time + kind, subject. Cells are `P` / `A`. Last three columns: periods attended, periods held, attendance %. |
+| `Sessions` | One row per session — division, date, day, period, start, end, kind, periods, subject, present, absent, strength, %. |
 | `Raw log` | One row per student per session, with status. For pivot tables. |
 
 Percentages are computed on **periods**, not sessions, so a 2-hour lab weighs double —
@@ -75,6 +78,28 @@ Files, Mail, or Drive from there. On Android and desktop it downloads directly.
 
 ---
 
+## Changing the timetable
+
+The day is defined once, in `src/lib/roster.js`:
+
+```js
+export const DAY_BLOCKS = [
+  { start: '08:00', end: '10:00' },  // periods 1–2
+  { start: '10:15', end: '18:15' }   // periods 3–10
+]
+```
+
+Every slot, period number and end time in the app and in the export is derived from
+those two blocks. Move a block or add a third and the picker follows — nothing else
+to change.
+
+Theory slots (10): 08:00, 09:00, 10:15, 11:15, 12:15, 13:15, 14:15, 15:15, 16:15, 17:15
+Lab slots (8): 08:00, 10:15, 11:15, 12:15, 13:15, 14:15, 15:15, 16:15 — 09:00 and 17:15
+are absent by design, since a two-hour lab from either would cross the break or overrun
+the day.
+
+An **Off-timetable time** field takes any start time, for extra or remedial sessions.
+
 ## Editing the roster
 
 Names and roll numbers live in `src/data/students.json`, generated from
@@ -110,7 +135,7 @@ src/
   styles.css            design tokens + all styles
   lib/
     db.js               Dexie schema, settings, clash detection
-    roster.js           roster access, slots, period/time maths
+    roster.js           roster access, the day's blocks, slot/period/time maths
     exportXlsx.js       workbook construction, share-sheet/download save
   components/
     SessionBar.jsx      division, date, kind, slot, subject

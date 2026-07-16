@@ -1,15 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, getSetting, setSetting } from './lib/db'
-import { today } from './lib/roster'
+import { today, defaultStart } from './lib/roster'
 import TakeScreen from './components/TakeScreen'
 import RecordsScreen from './components/RecordsScreen'
 import Toast from './components/Toast'
-
-function nearestHour() {
-  const h = new Date().getHours()
-  return `${String(Math.min(Math.max(h, 8), 17)).padStart(2, '0')}:00`
-}
 
 export default function App() {
   const [tab, setTab] = useState('take')
@@ -18,7 +13,7 @@ export default function App() {
   const [draft, setDraft] = useState({
     division: 'SY-A',
     date: today(),
-    start: nearestHour(),
+    start: defaultStart('theory'),
     type: 'theory',
     subject: ''
   })
@@ -34,10 +29,20 @@ export default function App() {
   }, [])
 
   // Remember the last division and subject so the next lecture starts one tap away.
+  // The remembered kind decides the slot list, so re-derive the start against it —
+  // a lab restored onto a theory-only start time would be off-timetable.
   useEffect(() => {
     ;(async () => {
       const last = await getSetting('lastDraft', null)
-      if (last) setDraft((d) => ({ ...d, division: last.division, subject: last.subject, type: last.type }))
+      if (last) {
+        setDraft((d) => ({
+          ...d,
+          division: last.division,
+          subject: last.subject,
+          type: last.type,
+          start: defaultStart(last.type)
+        }))
+      }
     })()
   }, [])
 

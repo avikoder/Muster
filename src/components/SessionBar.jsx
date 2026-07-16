@@ -1,7 +1,24 @@
-import { DIVISIONS, QUICK_SLOTS, PERIODS, roster, endTime, to12h } from '../lib/roster'
+import { useState } from 'react'
+import {
+  DIVISIONS,
+  PERIODS,
+  roster,
+  slotsFor,
+  snapToSlot,
+  periodOf,
+  endTime,
+  to12h
+} from '../lib/roster'
 
 export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
+  const [custom, setCustom] = useState(false)
   const end = endTime(draft.start, draft.type)
+  const slots = slotsFor(draft.type)
+  const period = periodOf(draft.start, draft.type)
+
+  // Switching kind must keep the start legal: a 09:00 theory can't become a
+  // 09:00 lab, because that would run through the break.
+  const setType = (t) => patch({ type: t, start: snapToSlot(draft.start, t) })
 
   return (
     <>
@@ -21,11 +38,12 @@ export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
 
       <div className="card">
         <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <span className="eyebrow">Session</span>
             <div style={{ marginTop: 4, fontSize: 14 }}>
-              {draft.date.split('-').reverse().join('/')} · {to12h(draft.start)}–{to12h(end)} ·{' '}
-              {draft.type === 'lab' ? 'Lab' : 'Theory'}
+              {draft.date.split('-').reverse().join('/')} ·{' '}
+              {period ? `Period ${period} · ` : ''}
+              {to12h(draft.start)}–{to12h(end)} · {draft.type === 'lab' ? 'Lab' : 'Theory'}
               {draft.subject ? ` · ${draft.subject}` : ''}
             </div>
           </div>
@@ -54,41 +72,61 @@ export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
                     key={t}
                     className="chip wide typebtn"
                     aria-pressed={draft.type === t}
-                    onClick={() => patch({ type: t })}
+                    onClick={() => setType(t)}
                   >
                     {t === 'lab' ? 'Practical lab' : 'Theory lecture'}
-                    <em>{PERIODS[t]} hour{PERIODS[t] > 1 ? 's' : ''}</em>
+                    <em>
+                      {PERIODS[t]} period{PERIODS[t] > 1 ? 's' : ''} · {PERIODS[t]} hour
+                      {PERIODS[t] > 1 ? 's' : ''}
+                    </em>
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="field">
-              <span className="eyebrow">Starts at</span>
-              <div className="slotline">
-                <input
-                  className="input"
-                  type="time"
-                  step="300"
-                  value={draft.start}
-                  onChange={(e) => patch({ start: e.target.value })}
-                />
-                <span className="dash">→</span>
-                <span className="endtime">{end}</span>
-              </div>
-              <div className="chiprow" style={{ marginTop: 8 }}>
-                {QUICK_SLOTS.map((s) => (
+              <span className="eyebrow">Slot</span>
+              <div className="slots">
+                {slots.map((s) => (
                   <button
-                    key={s}
-                    className="chip"
-                    aria-pressed={draft.start === s}
-                    onClick={() => patch({ start: s })}
+                    key={s.start}
+                    className="slot"
+                    aria-pressed={draft.start === s.start}
+                    aria-label={`Period ${s.period}, ${s.start} to ${s.end}`}
+                    onClick={() => {
+                      patch({ start: s.start })
+                      setCustom(false)
+                    }}
                   >
-                    {s}
+                    <span className="pd">{s.period}</span>
+                    <span className="tm">
+                      {s.start}–{s.end}
+                    </span>
                   </button>
                 ))}
               </div>
-              <p className="hint">End time follows the kind — theory runs 1 hour, a lab runs 2.</p>
+              <p className="hint">
+                {draft.type === 'lab'
+                  ? 'Labs run two periods, so they never cross the 10:00 break or the 18:15 finish.'
+                  : 'Ten periods a day — 8:00 to 10:00, then 10:15 to 18:15.'}
+              </p>
+
+              <button className="linkish" onClick={() => setCustom(!custom)} aria-expanded={custom}>
+                {custom ? 'Hide off-timetable time' : 'Off-timetable time'}
+              </button>
+              {custom && (
+                <div className="slotline" style={{ marginTop: 8 }}>
+                  <input
+                    className="input"
+                    type="time"
+                    step="300"
+                    value={draft.start}
+                    onChange={(e) => e.target.value && patch({ start: e.target.value })}
+                  />
+                  <span className="dash">→</span>
+                  <span className="endtime">{end}</span>
+                </div>
+              )}
             </div>
 
             <div className="field">
