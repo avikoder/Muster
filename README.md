@@ -16,6 +16,12 @@ deployed to GitHub Pages, installed as a PWA.
 - **Names view** when the grid isn't enough — full name and PRN per row, same tap target.
 - Every tap echoes the student's name under the tally, so a mis-tap on a 65-tile
   grid is visible immediately.
+- **Labs run batch by batch.** For SY-A and SY-B, picking *Practical lab* shows a
+  batch selector, and only that batch's roll numbers are marked. TY-B labs run
+  whole-class. Batches are by roll number: SY-A → A1 (1–21), A2 (22–43), A3 (44–65);
+  SY-B → B1 (1–21), B2 (22–42), B3 (43–64). A student's attendance % counts only the
+  sessions they were part of — a lab a student wasn't in is left blank, not marked
+  absent.
 - **Pick the slot off the timetable, not the clock.** The day is ten one-hour periods —
   8:00–10:00, break, then 10:15–18:15 — and the picker shows them by period number and
   time range. A theory lecture fills one period; a lab fills two and is only offered
@@ -24,15 +30,43 @@ deployed to GitHub Pages, installed as a PWA.
 - Date and subject per session. Recent subjects are remembered.
 - Saving the same division + date + start + subject twice offers to overwrite rather
   than silently duplicating.
+- **View and edit any past session.** The Records tab lists everything recorded;
+  tap a session to reopen it with its marks loaded, change anything — marks, date,
+  slot, kind or subject — and update. Division is locked while editing (a session
+  can't move to another roster). Delete is on the same row.
 - **Export to Excel** — all divisions or one.
+- **Daily backup at 7 PM.** After 7 PM, opening the app saves a silent restore
+  point on the phone, and a banner offers the one-tap Excel export until it's done
+  for the day. See the note below on why a phone app can't do this unattended.
+
+## About the 7 PM daily backup
+
+A phone PWA **cannot** run code while it's closed, and a browser will only write a
+file in response to a tap — both by design, and neither is bypassable without a
+server. So a genuine unattended "export a file at 7 PM while the app is shut" is not
+possible on iPhone (or reliably on Android). Rather than fake it, Muster does the two
+things that *are* reliable:
+
+- **Automatic local restore point.** The first time you open the app after 7 PM each
+  day, it silently snapshots all sessions into the phone's database. No tap needed.
+  This protects against a mis-tap or a bad edit — restore points are listed under
+  **Backup** in the Records tab, newest first, about three weeks kept. Restoring
+  replaces the current sessions with that day's.
+- **One-tap export reminder.** Open the app any time after 7 PM on a day you haven't
+  exported, and an amber banner sits at the top: *Daily backup due*. One tap writes
+  the Excel file you keep off the phone, and the banner stands down for the day.
+
+The restore points live only on the device — they're a safety net, not an off-phone
+backup. **The Excel export is the real backup**, because it's the copy that leaves the
+phone. Keep exporting it when the banner asks.
 
 ## The exported workbook
 
 | Sheet | Contents |
 | --- | --- |
-| `SY-A`, `SY-B`, `TY-B` | Students down the side, sessions across the top. Four header rows per column: date, period, time + kind, subject. Cells are `P` / `A`. Last three columns: periods attended, periods held, attendance %. |
-| `Sessions` | One row per session — division, date, day, period, start, end, kind, periods, subject, present, absent, strength, %. |
-| `Raw log` | One row per student per session, with status. For pivot tables. |
+| `SY-A`, `SY-B`, `TY-B` | Students down the side, sessions across the top. Four header rows per column: date, period, time + kind (+ batch, e.g. `LAB A1`), subject. Cells are `P` / `A`, or **blank** for a student who wasn't in that lab's batch. Last three columns are per-student: periods attended, periods held (only sessions they were in), attendance %. |
+| `Sessions` | One row per session — division, date, day, period, start, end, kind, batch, periods, subject, present, absent, strength, %. For a batch lab, strength is the batch size. |
+| `Raw log` | One row per student per session they were part of, with status. For pivot tables. |
 
 Percentages are computed on **periods**, not sessions, so a 2-hour lab weighs double —
 which is how attendance is actually counted.
@@ -100,6 +134,21 @@ the day.
 
 An **Off-timetable time** field takes any start time, for extra or remedial sessions.
 
+## Lab batches
+
+Batches are defined in `src/lib/roster.js`, by roll-number range:
+
+```js
+export const BATCHES = {
+  'SY-A': [{ id: 'A1', from: 1, to: 21 }, { id: 'A2', from: 22, to: 43 }, { id: 'A3', from: 44, to: 65 }],
+  'SY-B': [{ id: 'B1', from: 1, to: 21 }, { id: 'B2', from: 22, to: 42 }, { id: 'B3', from: 43, to: 64 }]
+}
+```
+
+A division not listed here (TY-B) has no batch split — its labs run whole-class. To
+change a range, add a batch, or split TY-B later, edit this object; the picker, the
+grid, and every attendance calculation follow from it.
+
 ## Editing the roster
 
 Names and roll numbers live in `src/data/students.json`, generated from
@@ -137,6 +186,7 @@ src/
     db.js               Dexie schema, settings, clash detection
     roster.js           roster access, the day's blocks, slot/period/time maths
     exportXlsx.js       workbook construction, share-sheet/download save
+    backup.js           daily snapshot, export-due check, restore
   components/
     SessionBar.jsx      division, date, kind, slot, subject
     RollGrid.jsx        the grid and the names list

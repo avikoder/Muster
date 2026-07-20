@@ -1,16 +1,31 @@
 import { useState, useMemo, useCallback } from 'react'
 import SessionBar from './SessionBar'
 import { RollGrid, NameList } from './RollGrid'
-import { roster, studentAt, endTime, PERIODS } from '../lib/roster'
+import { studentsFor, studentAt, endTime, prettyDate, hasBatches, PERIODS } from '../lib/roster'
 import { db, findClash } from '../lib/db'
 
-export default function TakeScreen({ draft, patch, present, setPresent, sessions, subjects, toast, onSaved }) {
+export default function TakeScreen({
+  draft,
+  patch,
+  present,
+  setPresent,
+  sessions,
+  subjects,
+  toast,
+  onSaved,
+  editing,
+  onCancelEdit
+}) {
   const [open, setOpen] = useState(false)
   const [view, setView] = useState('grid')
   const [touched, setTouched] = useState(() => new Set())
   const [echo, setEcho] = useState(null)
 
-  const strength = roster[draft.division].length
+  const cohort = useMemo(
+    () => studentsFor(draft.division, draft.type, draft.batch),
+    [draft.division, draft.type, draft.batch]
+  )
+  const strength = cohort.length
   const nPresent = present.size
   const nAbsent = strength - nPresent
   const pct = strength ? Math.round((nPresent / strength) * 100) : 0
@@ -29,14 +44,22 @@ export default function TakeScreen({ draft, patch, present, setPresent, sessions
   )
 
   const markAll = (all) => {
-    setPresent(all ? new Set(roster[draft.division].map((s) => s.roll)) : new Set())
-    setTouched(new Set(roster[draft.division].map((s) => s.roll)))
+    setPresent(all ? new Set(cohort.map((s) => s.roll)) : new Set())
+    setTouched(new Set(cohort.map((s) => s.roll)))
     setEcho(null)
   }
 
+  // When editing, exclude the session being edited from the clash test — its own
+  // slot is not a conflict, but moving it onto a different session's slot is.
   const existing = useMemo(
-    () => findClash(sessions, { id: null, ...draft, subject: draft.subject || '' }),
-    [sessions, draft]
+    () =>
+      findClash(sessions, {
+        id: editing ? editing.id : null,
+        ...draft,
+        batch: draft.type === 'lab' && hasBatches(draft.division) ? draft.batch : null,
+        subject: draft.subject || ''
+      }),
+    [sessions, draft, editing]
   )
 
   async function save() {
@@ -52,9 +75,25 @@ export default function TakeScreen({ draft, patch, present, setPresent, sessions
       end: endTime(draft.start, draft.type),
       type: draft.type,
       periods: PERIODS[draft.type],
+      batch: draft.type === 'lab' && hasBatches(draft.division) ? draft.batch : null,
       subject: draft.subject.trim(),
       present: [...present].sort((a, b) => a - b),
       updatedAt: Date.now()
+    }
+
+    if (editing) {
+      // Editing an existing record. If the new slot lands on a *different*
+      // session, that is a real collision the user should resolve.
+      if (existing) {
+        toast('Another session already occupies that slot — change the time or subject.')
+        setOpen(true)
+        return
+      }
+      await db.sessions.update(editing.id, record)
+      toast(`Updated · ${nPresent} present, ${nAbsent} absent`)
+      onSaved(record.subject)
+      onCancelEdit() // leaves edit mode and returns to Records
+      return
     }
 
     if (existing) {
@@ -74,7 +113,29 @@ export default function TakeScreen({ draft, patch, present, setPresent, sessions
 
   return (
     <>
-      <SessionBar draft={draft} patch={patch} subjects={subjects} open={open} setOpen={setOpen} />
+      {editing && (
+        <div className="editbanner">
+          <div>
+            <span className="eyebrow">Editing</span>
+            <div className="ebtitle">
+              {editing.division}
+              {editing.batch ? ` · ${editing.batch}` : ''} · {prettyDate(editing.date)} · {editing.subject}
+            </div>
+          </div>
+          <button className="btn sm" onClick={onCancelEdit}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      <SessionBar
+        draft={draft}
+        patch={patch}
+        subjects={subjects}
+        open={open}
+        setOpen={setOpen}
+        locked={!!editing}
+      />
 
       <div className="tally">
         <div className="tallybar">
@@ -94,6 +155,8 @@ export default function TakeScreen({ draft, patch, present, setPresent, sessions
                 {echo.present ? 'present' : 'absent'}
               </span>
             </>
+          ) : editing ? (
+            'Adjust the marks, then update.'
           ) : existing ? (
             <span style={{ color: 'var(--amber)' }}>This slot is already recorded — saving will overwrite it.</span>
           ) : (
@@ -118,15 +181,20 @@ export default function TakeScreen({ draft, patch, present, setPresent, sessions
       </div>
 
       {view === 'grid' ? (
-        <RollGrid division={draft.division} present={present} touched={touched} onToggle={toggle} />
+        <RollGrid students={cohort} present={present} touched={touched} onToggle={toggle} />
       ) : (
-        <NameList division={draft.division} present={present} touched={touched} onToggle={toggle} />
+        <NameList students={cohort} present={present} touched={touched} onToggle={toggle} />
       )}
 
       <div className="actionbar">
         <div className="inner">
+          {editing && (
+            <button className="btn" onClick={onCancelEdit}>
+              Cancel
+            </button>
+          )}
           <button className="btn primary" onClick={save}>
-            {existing ? 'Overwrite session' : 'Save session'}
+            {editing ? 'Update session' : existing ? 'Overwrite session' : 'Save session'}
           </button>
         </div>
       </div>

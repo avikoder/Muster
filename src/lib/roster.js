@@ -4,6 +4,55 @@ import students from '../data/students.json'
 export const DIVISIONS = ['SY-A', 'SY-B', 'TY-B']
 export const roster = students
 
+// Labs are taken batch by batch. Batches are defined by roll-number range and
+// apply to lab sessions only — theory is always the whole division. TY-B has no
+// batch split, so its labs run whole-class.
+export const BATCHES = {
+  'SY-A': [
+    { id: 'A1', from: 1, to: 21 },
+    { id: 'A2', from: 22, to: 43 },
+    { id: 'A3', from: 44, to: 65 }
+  ],
+  'SY-B': [
+    { id: 'B1', from: 1, to: 21 },
+    { id: 'B2', from: 22, to: 42 },
+    { id: 'B3', from: 43, to: 64 }
+  ]
+}
+
+export function hasBatches(division) {
+  return Boolean(BATCHES[division])
+}
+
+export function batchesOf(division) {
+  return BATCHES[division] || []
+}
+
+export function batchRange(division, id) {
+  return batchesOf(division).find((b) => b.id === id) || null
+}
+
+export function batchSize(division, id) {
+  const r = batchRange(division, id)
+  return r ? roster[division].filter((s) => s.roll >= r.from && s.roll <= r.to).length : 0
+}
+
+/** The students to show and mark for a session, respecting the lab batch split. */
+export function studentsFor(division, type, batch) {
+  if (type === 'lab' && hasBatches(division) && batch) {
+    const r = batchRange(division, batch)
+    if (r) return roster[division].filter((s) => s.roll >= r.from && s.roll <= r.to)
+  }
+  return roster[division]
+}
+
+/** Was this roll number part of the session? Non-batch sessions include everyone. */
+export function isScheduled(session, roll) {
+  if (session.type !== 'lab' || !session.batch) return true
+  const r = batchRange(session.division, session.batch)
+  return r ? roll >= r.from && roll <= r.to : true
+}
+
 export function rollsOf(division) {
   return roster[division].map((s) => s.roll)
 }

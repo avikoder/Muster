@@ -471,6 +471,74 @@ button { cursor: pointer; border: none; background: none; }
 .stat .k { font-size: 13.5px; }
 .stat .v { margin-left: auto; font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
 
+/* ---------- Edit + backup + reminder ------------------------------------- */
+
+.editbanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 12px 0;
+  padding: 11px 14px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: var(--r-md);
+}
+.editbanner .eyebrow { color: #94A3B8; }
+.editbanner .ebtitle { font-size: 13.5px; margin-top: 2px; }
+.editbanner > div { flex: 1; min-width: 0; }
+.editbanner .btn { background: rgba(255,255,255,0.14); border-color: transparent; color: #fff; }
+
+.duebanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--amber);
+  color: #fff;
+  font-size: 12.5px;
+  position: sticky;
+  top: calc(var(--safe-top) + 55px);
+  z-index: 25;
+}
+.duebanner > div { flex: 1; min-width: 0; }
+.duebanner b { font-family: var(--font-display); }
+.duebanner span { opacity: 0.9; }
+.duebanner .btn { background: rgba(255,255,255,0.2); border-color: transparent; color: #fff; white-space: nowrap; }
+
+/* session rows are now buttons that open the editor */
+button.sessionrow {
+  width: 100%;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.sessionrow.tappable { cursor: pointer; }
+.sessionrow.tappable:active { background: var(--rule-soft); }
+
+.rowactions { display: flex; align-items: center; gap: 10px; margin-top: 4px; justify-content: flex-end; }
+.editcue { font-family: var(--font-mono); font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.del {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--red);
+  padding: 2px 6px;
+  border: 1px solid #E9C4C0;
+  border-radius: 4px;
+}
+.del:active { background: var(--red-soft); }
+
+.backuphead {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  background: none;
+}
+.backuphead > div { flex: 1; }
+.backuphead .chev { font-family: var(--font-mono); color: var(--ink-3); }
+
 /* ---------- Toast --------------------------------------------------------- */
 
 .toast {

@@ -1,9 +1,7 @@
-import { roster } from '../lib/roster'
-
-export function RollGrid({ division, present, touched, onToggle }) {
+export function RollGrid({ students, present, touched, onToggle }) {
   return (
     <div className="grid">
-      {roster[division].map((s) => {
+      {students.map((s) => {
         const on = present.has(s.roll)
         return (
           <button
@@ -21,10 +19,10 @@ export function RollGrid({ division, present, touched, onToggle }) {
   )
 }
 
-export function NameList({ division, present, touched, onToggle }) {
+export function NameList({ students, present, touched, onToggle }) {
   return (
     <div className="list">
-      {roster[division].map((s) => {
+      {students.map((s) => {
         const on = present.has(s.roll)
         return (
           <button

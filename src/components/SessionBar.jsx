@@ -7,10 +7,13 @@ import {
   snapToSlot,
   periodOf,
   endTime,
-  to12h
+  to12h,
+  hasBatches,
+  batchesOf,
+  batchSize
 } from '../lib/roster'
 
-export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
+export default function SessionBar({ draft, patch, subjects, open, setOpen, locked }) {
   const [custom, setCustom] = useState(false)
   const end = endTime(draft.start, draft.type)
   const slots = slotsFor(draft.type)
@@ -28,10 +31,11 @@ export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
             key={d}
             className="divbtn"
             aria-pressed={draft.division === d}
-            onClick={() => patch({ division: d })}
+            disabled={locked && draft.division !== d}
+            onClick={() => !locked && patch({ division: d })}
           >
             {d}
-            <small>{roster[d].length} on roll</small>
+            <small>{locked && draft.division === d ? 'editing' : `${roster[d].length} on roll`}</small>
           </button>
         ))}
       </div>
@@ -44,6 +48,7 @@ export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
               {draft.date.split('-').reverse().join('/')} ·{' '}
               {period ? `Period ${period} · ` : ''}
               {to12h(draft.start)}–{to12h(end)} · {draft.type === 'lab' ? 'Lab' : 'Theory'}
+              {draft.type === 'lab' && draft.batch ? ` · ${draft.batch}` : ''}
               {draft.subject ? ` · ${draft.subject}` : ''}
             </div>
           </div>
@@ -83,6 +88,28 @@ export default function SessionBar({ draft, patch, subjects, open, setOpen }) {
                 ))}
               </div>
             </div>
+
+            {draft.type === 'lab' && hasBatches(draft.division) && (
+              <div className="field">
+                <span className="eyebrow">Batch</span>
+                <div className="chiprow">
+                  {batchesOf(draft.division).map((b) => (
+                    <button
+                      key={b.id}
+                      className="chip wide typebtn"
+                      aria-pressed={draft.batch === b.id}
+                      onClick={() => patch({ batch: b.id })}
+                    >
+                      {b.id}
+                      <em>
+                        roll {b.from}–{b.to} · {batchSize(draft.division, b.id)}
+                      </em>
+                    </button>
+                  ))}
+                </div>
+                <p className="hint">Labs are taken one batch at a time — only this batch is marked.</p>
+              </div>
+            )}
 
             <div className="field">
               <span className="eyebrow">Slot</span>

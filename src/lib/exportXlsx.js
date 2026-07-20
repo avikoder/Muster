@@ -1,4 +1,4 @@
-import { roster, prettyDate, shortDate, periodOf, PERIODS } from './roster'
+import { roster, prettyDate, shortDate, periodOf, isScheduled, batchSize, PERIODS } from './roster'
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -35,14 +35,15 @@ function divisionSheet(XLSX, division, sessions) {
     const p = periodOf(s.start, s.type)
     return p ? `P${p}` : '—'
   })])
-  rows.push(['', '', '', ...list.map((s) => `${s.start} ${s.type === 'lab' ? 'LAB' : 'TH'}`)])
+  rows.push(['', '', '', ...list.map((s) => `${s.start} ${s.type === 'lab' ? 'LAB' : 'TH'}${s.batch ? ' ' + s.batch : ''}`)])
   rows.push(['', '', '', ...list.map((s) => s.subject || '—')])
 
-  const held = list.reduce((n, s) => n + s.periods, 0)
-
   for (const st of students) {
-    const marks = list.map((s) => (s.present.includes(st.roll) ? 'P' : 'A'))
-    const got = list.reduce((n, s) => n + (s.present.includes(st.roll) ? s.periods : 0), 0)
+    // A student outside a lab's batch was not scheduled, so the cell is blank —
+    // it counts as neither present nor absent, and not toward their held total.
+    const marks = list.map((s) => (isScheduled(s, st.roll) ? (s.present.includes(st.roll) ? 'P' : 'A') : ''))
+    const got = list.reduce((n, s) => n + (isScheduled(s, st.roll) && s.present.includes(st.roll) ? s.periods : 0), 0)
+    const held = list.reduce((n, s) => n + (isScheduled(s, st.roll) ? s.periods : 0), 0)
     const pct = held ? Math.round((got / held) * 1000) / 10 : ''
     rows.push([st.roll, st.prn, st.name, ...marks, got, held, pct])
   }
@@ -81,10 +82,11 @@ function divisionSheet(XLSX, division, sessions) {
 
 function sessionsSheet(XLSX, sessions) {
   const rows = [
-    ['Division', 'Date', 'Day', 'Period', 'Start', 'End', 'Type', 'Periods', 'Subject', 'Present', 'Absent', 'Strength', '%']
+    ['Division', 'Date', 'Day', 'Period', 'Start', 'End', 'Type', 'Batch', 'Periods', 'Subject', 'Present', 'Absent', 'Strength', '%']
   ]
   for (const s of sortSessions(sessions)) {
-    const strength = roster[s.division].length
+    // For a batch lab, strength is the batch size, not the whole division.
+    const strength = s.batch ? batchSize(s.division, s.batch) : roster[s.division].length
     const present = s.present.length
     rows.push([
       s.division,
@@ -94,6 +96,7 @@ function sessionsSheet(XLSX, sessions) {
       s.start,
       s.end,
       s.type === 'lab' ? 'Lab' : 'Theory',
+      s.batch || '—',
       s.periods,
       s.subject || '—',
       present,
@@ -105,19 +108,21 @@ function sessionsSheet(XLSX, sessions) {
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [
     { wch: 8 }, { wch: 11 }, { wch: 5 }, { wch: 8 }, { wch: 7 }, { wch: 7 },
-    { wch: 8 }, { wch: 8 }, { wch: 24 }, { wch: 9 }, { wch: 8 }, { wch: 9 }, { wch: 7 }
+    { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 24 }, { wch: 9 }, { wch: 8 }, { wch: 9 }, { wch: 7 }
   ]
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 12 } }) }
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 13 } }) }
   return ws
 }
 
 function logSheet(XLSX, sessions) {
-  const rows = [['Division', 'Date', 'Period', 'Start', 'Type', 'Periods', 'Subject', 'Roll', 'PRN', 'Name', 'Status']]
+  const rows = [['Division', 'Date', 'Period', 'Start', 'Type', 'Batch', 'Periods', 'Subject', 'Roll', 'PRN', 'Name', 'Status']]
   for (const s of sortSessions(sessions)) {
-    for (const st of roster[s.division]) {
+    // Only the students who were part of the session get a row.
+    for (const st of roster[s.division].filter((x) => isScheduled(s, x.roll))) {
       rows.push([
         s.division, s.date, periodOf(s.start, s.type) || '—', s.start,
         s.type === 'lab' ? 'Lab' : 'Theory',
+        s.batch || '—',
         s.periods, s.subject || '—',
         st.roll, st.prn, st.name,
         s.present.includes(st.roll) ? 'Present' : 'Absent'
@@ -126,10 +131,10 @@ function logSheet(XLSX, sessions) {
   }
   const ws = XLSX.utils.aoa_to_sheet(rows)
   ws['!cols'] = [
-    { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 8 },
+    { wch: 8 }, { wch: 11 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 7 }, { wch: 8 },
     { wch: 24 }, { wch: 6 }, { wch: 15 }, { wch: 30 }, { wch: 9 }
   ]
-  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 10 } }) }
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length - 1, c: 11 } }) }
   return ws
 }
 
